@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
-    <label>PRA Role - Buyers Agent</label>
-    <description>Baseline system access expected for the Buyers Agent role. No system-level dangerous permissions.</description>
+    <label>PRA Role - Account Executive</label>
+    <description>Baseline system access expected for the Account Executive role. No system-level dangerous permissions.</description>
     <hasActivationRequired>false</hasActivationRequired>
 </PermissionSet>

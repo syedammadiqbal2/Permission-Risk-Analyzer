@@ -34,7 +34,7 @@ product spec, pricing, and roadmap.
   - `Permission_Risk_Analyzer_Admin` - grants access to the app itself (Apex classes, custom object, tab, app) - assign this to anyone who should be able to run scans and view results
   - `PRA_Role_*` (one per role in `roles/`) - example baseline permission sets for a sample org hierarchy, used to demonstrate the same-role comparison feature
   - `PRA_Elevated_Emergency_IT_Access` - example excess-access permission set for demonstrating privilege creep
-- `force-app/main/default/roles` - example 8-role hierarchy (Broker/Owner down to individual-contributor roles) used by the sample permission sets above
+- `force-app/main/default/roles` - example 8-role product-company hierarchy (Executive Leadership down through Sales/Marketing individual-contributor roles) used by the sample permission sets above
 - `force-app/main/default/flexipages`, `tabs`, `applications` - the app is fully packaged: installing it and assigning `Permission_Risk_Analyzer_Admin` is all that's needed, no manual Setup steps
 
 ## Deploying to an org

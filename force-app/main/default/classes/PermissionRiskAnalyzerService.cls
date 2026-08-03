@@ -250,7 +250,10 @@ public with sharing class PermissionRiskAnalyzerService {
             return false;
         }
         String lower = roleName.toLowerCase();
-        List<String> managementKeywords = new List<String>{ 'admin', 'manager', 'director', 'vp', 'chief', 'head', 'lead', 'it' };
+        List<String> managementKeywords = new List<String>{
+            'admin', 'manager', 'director', 'vp', 'chief', 'head', 'lead', 'it',
+            'executive', 'ceo', 'cfo', 'cto', 'coo', 'president', 'founder', 'owner'
+        };
         for (String keyword : managementKeywords) {
             if (lower.contains(keyword)) {
                 return true;
