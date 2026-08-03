@@ -82,6 +82,57 @@ export default class PermissionRiskDashboard extends LightningElement {
         return this.logs.filter((log) => log.RiskLevel__c !== 'Low').length;
     }
 
+    get lastScanDateDisplay() {
+        if (!this.lastScanDate) {
+            return '';
+        }
+        const scanDate = new Date(this.lastScanDate);
+        if (Number.isNaN(scanDate.getTime())) {
+            return '';
+        }
+
+        const now = new Date();
+        const diffMs = now - scanDate;
+        const diffMin = Math.floor(diffMs / 60000);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffMin < 1) {
+            return 'Just now';
+        }
+        if (diffMin < 60) {
+            return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+        }
+
+        const isSameDay = scanDate.toDateString() === now.toDateString();
+        if (isSameDay) {
+            return 'Today';
+        }
+
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (scanDate.toDateString() === yesterday.toDateString()) {
+            return 'Yesterday';
+        }
+
+        if (diffDay < 7) {
+            return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+        }
+
+        const diffWeek = Math.floor(diffDay / 7);
+        if (diffWeek < 5) {
+            return `${diffWeek} week${diffWeek === 1 ? '' : 's'} ago`;
+        }
+
+        const diffMonth = Math.floor(diffDay / 30);
+        if (diffMonth < 12) {
+            return `${diffMonth} month${diffMonth === 1 ? '' : 's'} ago`;
+        }
+
+        const diffYear = Math.floor(diffDay / 365);
+        return `${diffYear} year${diffYear === 1 ? '' : 's'} ago`;
+    }
+
     get roleOptions() {
         return this.buildOptionsFrom((log) => log.User__r && log.User__r.UserRole ? log.User__r.UserRole.Name : null);
     }
