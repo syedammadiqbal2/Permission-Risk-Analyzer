@@ -32,6 +32,7 @@ export default class PermissionRiskDashboard extends LightningElement {
     roleFilter = '';
     profileFilter = '';
     severityFilter = '';
+    showAllUsers = false;
 
     severityOptions = SEVERITY_OPTIONS;
 
@@ -153,7 +154,9 @@ export default class PermissionRiskDashboard extends LightningElement {
     }
 
     get hasActiveFilters() {
-        return Boolean(this.searchTerm || this.roleFilter || this.profileFilter || this.severityFilter);
+        return Boolean(
+            this.searchTerm || this.roleFilter || this.profileFilter || this.severityFilter || this.showAllUsers
+        );
     }
 
     get clearFiltersDisabled() {
@@ -163,6 +166,12 @@ export default class PermissionRiskDashboard extends LightningElement {
     get filteredLogs() {
         const term = this.searchTerm.trim().toLowerCase();
         return this.logs.filter((log) => {
+            // By default, users with no risk (score 0) are hidden - only
+            // flagged/at-risk users are worth reviewing. "Show All Users"
+            // reveals everyone, including the 0-risk baseline.
+            if (!this.showAllUsers && !log.RiskScore__c) {
+                return false;
+            }
             if (this.severityFilter && log.RiskLevel__c !== this.severityFilter) {
                 return false;
             }
@@ -208,7 +217,18 @@ export default class PermissionRiskDashboard extends LightningElement {
     }
 
     get showNoMatchesState() {
-        return this.hasLogs && this.hasActiveFilters && this.filteredResults.length === 0;
+        return this.hasLogs && this.filteredResults.length === 0;
+    }
+
+    get noMatchesMessage() {
+        if (!this.showAllUsers && !this.hasActiveFiltersExcludingShowAll) {
+            return 'No at-risk users found. Check "Show All Users" to see everyone, including 0-risk users.';
+        }
+        return 'No users match the current filters';
+    }
+
+    get hasActiveFiltersExcludingShowAll() {
+        return Boolean(this.searchTerm || this.roleFilter || this.profileFilter || this.severityFilter);
     }
 
     setLogs(data) {
@@ -265,11 +285,16 @@ export default class PermissionRiskDashboard extends LightningElement {
         this.severityFilter = event.detail.value;
     }
 
+    handleShowAllUsersChange(event) {
+        this.showAllUsers = event.target.checked;
+    }
+
     handleClearFilters() {
         this.searchTerm = '';
         this.roleFilter = '';
         this.profileFilter = '';
         this.severityFilter = '';
+        this.showAllUsers = false;
     }
 
     handleExportCsv() {
