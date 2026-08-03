@@ -1,0 +1,7 @@
+.sf/
+.sfdx/
+.vscode/
+.claude/settings.local.json
+node_modules/
+.DS_Store
+*.log

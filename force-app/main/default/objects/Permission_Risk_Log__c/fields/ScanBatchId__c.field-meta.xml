@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ScanBatchId__c</fullName>
+    <label>Scan Batch Id</label>
+    <type>Text</type>
+    <length>36</length>
+    <description>Groups all Permission_Risk_Log__c records created by the same scan run, so trend/history queries can filter by scan.</description>
+</CustomField>

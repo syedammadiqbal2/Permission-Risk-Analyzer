@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Permission Risk Analyzer Admin</label>
+    <description>Grants access to run scans and view results in the Permission Risk Analyzer app. Assign to admins/security reviewers only - the app reads sensitive permission data for every user in the org.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+
+    <classAccesses>
+        <apexClass>PermissionRiskAnalyzerController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>PermissionRiskAnalyzerService</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+
+    <!--
+        No <tabSettings> block here on purpose. LWC-only tabs (using the
+        lightning__Tab target on permissionRiskDashboard) can't be defined as
+        source metadata - create the tab once via Setup > Tabs > Lightning
+        Component Tabs > New, picking permissionRiskDashboard, then retrieve
+        it into this package and add a <tabSettings> entry here for its
+        actual API name.
+    -->
+
+    <objectPermissions>
+        <object>Permission_Risk_Log__c</object>
+        <allowCreate>true</allowCreate>
+        <allowRead>true</allowRead>
+        <allowEdit>true</allowEdit>
+        <allowDelete>true</allowDelete>
+        <modifyAllRecords>false</modifyAllRecords>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
+
+    <fieldPermissions>
+        <field>Permission_Risk_Log__c.User__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Permission_Risk_Log__c.ScanBatchId__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Permission_Risk_Log__c.DangerousPermissions__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Permission_Risk_Log__c.RecommendedActions__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Permission_Risk_Log__c.Details__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Permission_Risk_Log__c.OrgHealthScore__c</field>
+        <readable>true</readable>
+        <editable>true</editable>
+    </fieldPermissions>
+</PermissionSet>

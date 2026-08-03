@@ -1,0 +1,108 @@
+<template>
+    <lightning-card title="Permission Risk Analyzer" icon-name="utility:shield">
+        <div slot="actions">
+            <lightning-button-group>
+                <lightning-button
+                    label="Scan Org Now"
+                    variant="brand"
+                    icon-name="utility:refresh"
+                    onclick={handleScanClick}
+                    disabled={isLoading}
+                ></lightning-button>
+                <lightning-button
+                    label="Export CSV"
+                    icon-name="utility:download"
+                    onclick={handleExportCsv}
+                    disabled={isLoading}
+                ></lightning-button>
+            </lightning-button-group>
+        </div>
+
+        <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Scanning org..." size="medium"></lightning-spinner>
+            </template>
+
+            <template if:true={errorMessage}>
+                <div class="slds-notify slds-notify_alert slds-theme_alert-texture slds-theme_error" role="alert">
+                    {errorMessage}
+                </div>
+            </template>
+
+            <template if:true={showEmptyState}>
+                <div class="slds-illustration slds-illustration_small slds-p-around_large slds-text-align_center">
+                    <p class="slds-text-heading_small">No scan results yet</p>
+                    <p class="slds-text-body_regular slds-text-color_weak">
+                        Click "Scan Org Now" to analyze user permissions and surface risk.
+                    </p>
+                </div>
+            </template>
+
+            <template if:true={hasLogs}>
+                <!-- Overall org risk -->
+                <div class="slds-box slds-box_x-small slds-m-bottom_medium risk-summary-box">
+                    <div class="slds-grid slds-grid_align-spread slds-wrap">
+                        <div>
+                            <p class="slds-text-title_caps slds-text-color_weak">Overall Org Risk</p>
+                            <span class={overallRiskBadgeClass}>{overallRiskLevel}</span>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
+                                {atRiskUserCount} users at risk · Last scan: {lastScanDate}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk breakdown -->
+                <div class="slds-grid slds-wrap slds-gutters slds-m-bottom_medium">
+                    <template for:each={riskCounts} for:item="item">
+                        <div key={item.level} class="slds-col slds-size_1-of-2 slds-medium-size_1-of-4 slds-p-vertical_x-small">
+                            <div class="slds-box slds-box_x-small slds-text-align_center">
+                                <span class={item.badgeClass}>{item.level}</span>
+                                <p class="slds-text-heading_medium slds-m-top_x-small">{item.count}</p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Top risks table -->
+                <p class="slds-text-heading_small slds-m-bottom_x-small">Top Risks</p>
+                <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                    <thead>
+                        <tr class="slds-line-height_reset">
+                            <th scope="col">User</th>
+                            <th scope="col">Risk Level</th>
+                            <th scope="col">Risk Score</th>
+                            <th scope="col">Dangerous Permissions</th>
+                            <th scope="col"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={topRisks} for:item="row">
+                            <tr key={row.id}>
+                                <td>
+                                    <div class="slds-truncate" title={row.name}>{row.name}</div>
+                                    <div class="slds-truncate slds-text-body_small slds-text-color_weak" title={row.username}>{row.username}</div>
+                                </td>
+                                <td><span class={row.badgeClass}>{row.riskLevel}</span></td>
+                                <td>{row.riskScore}</td>
+                                <td><div class="slds-truncate" title={row.dangerousPermissions}>{row.dangerousPermissions}</div></td>
+                                <td>
+                                    <lightning-button
+                                        label="View"
+                                        variant="neutral"
+                                        data-id={row.id}
+                                        onclick={handleViewDetail}
+                                    ></lightning-button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </template>
+        </div>
+    </lightning-card>
+
+    <template if:true={selectedLogId}>
+        <c-permission-risk-user-detail record-id={selectedLogId} onclose={handleCloseDetail}></c-permission-risk-user-detail>
+    </template>
+</template>

@@ -1,0 +1,67 @@
+<template>
+    <section class="slds-modal slds-fade-in-open" role="dialog" aria-modal="true">
+        <div class="slds-modal__container">
+            <header class="slds-modal__header">
+                <lightning-button-icon
+                    icon-name="utility:close"
+                    alternative-text="Close"
+                    variant="bare-inverse"
+                    class="slds-modal__close"
+                    onclick={handleClose}
+                ></lightning-button-icon>
+                <h2 class="slds-text-heading_medium">{userName}</h2>
+                <p class="slds-text-body_small">{username}</p>
+            </header>
+
+            <div class="slds-modal__content slds-p-around_medium">
+                <template if:true={errorMessage}>
+                    <div class="slds-notify slds-notify_alert slds-theme_error" role="alert">{errorMessage}</div>
+                </template>
+
+                <template if:true={log}>
+                    <div class="slds-grid slds-wrap slds-gutters slds-m-bottom_medium">
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
+                            <p class="slds-text-title_caps slds-text-color_weak">Risk Level</p>
+                            <span class={riskBadgeClass}>{riskLevel}</span>
+                        </div>
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2">
+                            <p class="slds-text-title_caps slds-text-color_weak">Role</p>
+                            <p>{roleName}</p>
+                        </div>
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-m-top_small">
+                            <p class="slds-text-title_caps slds-text-color_weak">Profile</p>
+                            <p>{profileName}</p>
+                        </div>
+                        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-m-top_small">
+                            <p class="slds-text-title_caps slds-text-color_weak">Last Login</p>
+                            <lightning-formatted-date-time value={lastLoginDate} year="numeric" month="short" day="2-digit"></lightning-formatted-date-time>
+                        </div>
+                    </div>
+
+                    <template if:true={hasDangerousPermissions}>
+                        <p class="slds-text-heading_small slds-m-bottom_x-small">Dangerous Permissions</p>
+                        <ul class="slds-list_dotted slds-m-bottom_medium">
+                            <template for:each={dangerousPermissions} for:item="perm">
+                                <li key={perm}>{perm}</li>
+                            </template>
+                        </ul>
+                    </template>
+
+                    <template if:true={hasRecommendedActions}>
+                        <p class="slds-text-heading_small slds-m-bottom_x-small">Recommended Actions</p>
+                        <ul class="slds-list_dotted">
+                            <template for:each={recommendedActions} for:item="action">
+                                <li key={action}>{action}</li>
+                            </template>
+                        </ul>
+                    </template>
+                </template>
+            </div>
+
+            <footer class="slds-modal__footer">
+                <lightning-button label="Close" onclick={handleClose}></lightning-button>
+            </footer>
+        </div>
+    </section>
+    <div class="slds-backdrop slds-backdrop_open"></div>
+</template>
