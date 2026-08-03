@@ -53,13 +53,15 @@ private class PermissionRiskAnalyzerServiceTest {
                 new PermissionSetAssignment(AssigneeId = inactiveWithAccess.Id, PermissionSetId = riskySet.Id)
             };
 
-            // Two users sharing a role, one with an extra Account edit grant the
-            // other doesn't have - exercises the same-role object-access
-            // comparison in applyPeerObjectAccessComparison. "Standard User"
-            // already grants Account/Contact/etc. edit access by default, which
-            // would make both peers identical regardless of the extra permission
-            // set - so these two specifically use the near-empty baseline
-            // profile instead, to isolate the effect of the extra grant.
+            // Three users sharing a role, one with an extra Account edit grant
+            // the other two don't have - a clear minority (1 of 3), matching how
+            // applyPeerObjectAccessComparison only flags when access is held by
+            // strictly fewer than half the role, not an even/majority split.
+            // "Standard User" already grants Account/Contact/etc. edit access by
+            // default, which would make every peer identical regardless of the
+            // extra permission set - so these three specifically use the
+            // near-empty baseline profile instead, to isolate the effect of the
+            // extra grant.
             Profile minimalProfile = [SELECT Id FROM Profile WHERE Name = 'Minimum Access - Salesforce' LIMIT 1];
 
             UserRole peerRole = new UserRole(Name = 'PRA_Test_Peer_Role');
@@ -74,6 +76,11 @@ private class PermissionRiskAnalyzerServiceTest {
             peerWithoutEditAccess.IsActive = true;
             peerWithoutEditAccess.UserRoleId = peerRole.Id;
             insert peerWithoutEditAccess;
+
+            User peerWithoutEditAccess2 = buildTestUser('PeerNoEdit2', minimalProfile.Id);
+            peerWithoutEditAccess2.IsActive = true;
+            peerWithoutEditAccess2.UserRoleId = peerRole.Id;
+            insert peerWithoutEditAccess2;
 
             PermissionSet accountEditSet = new PermissionSet(
                 Name = 'PRA_Test_Account_Edit',
@@ -90,6 +97,43 @@ private class PermissionRiskAnalyzerServiceTest {
                 AssigneeId = peerWithEditAccess.Id,
                 PermissionSetId = accountEditSet.Id
             );
+
+            // A second role where the MAJORITY (2 of 3) hold Contact edit access -
+            // this should never be flagged, since having access is the norm here,
+            // not an outlier. Exercises the other side of the minority-only rule.
+            UserRole majorityRole = new UserRole(Name = 'PRA_Test_Majority_Role');
+            insert majorityRole;
+
+            User majorityWithEdit1 = buildTestUser('MajorityEdit1', minimalProfile.Id);
+            majorityWithEdit1.IsActive = true;
+            majorityWithEdit1.UserRoleId = majorityRole.Id;
+            insert majorityWithEdit1;
+
+            User majorityWithEdit2 = buildTestUser('MajorityEdit2', minimalProfile.Id);
+            majorityWithEdit2.IsActive = true;
+            majorityWithEdit2.UserRoleId = majorityRole.Id;
+            insert majorityWithEdit2;
+
+            User majorityWithoutEdit = buildTestUser('MajorityNoEdit', minimalProfile.Id);
+            majorityWithoutEdit.IsActive = true;
+            majorityWithoutEdit.UserRoleId = majorityRole.Id;
+            insert majorityWithoutEdit;
+
+            PermissionSet contactEditSet = new PermissionSet(
+                Name = 'PRA_Test_Contact_Edit',
+                Label = 'PRA Test Contact Edit'
+            );
+            insert contactEditSet;
+            insert new ObjectPermissions(
+                ParentId = contactEditSet.Id,
+                SobjectType = 'Contact',
+                PermissionsRead = true,
+                PermissionsEdit = true
+            );
+            insert new List<PermissionSetAssignment>{
+                new PermissionSetAssignment(AssigneeId = majorityWithEdit1.Id, PermissionSetId = contactEditSet.Id),
+                new PermissionSetAssignment(AssigneeId = majorityWithEdit2.Id, PermissionSetId = contactEditSet.Id)
+            };
 
             // The controller's queries use WITH SECURITY_ENFORCED, so the running
             // user needs the app's own permission set (which grants FLS on the
@@ -214,13 +258,13 @@ private class PermissionRiskAnalyzerServiceTest {
             byUserId.put(r.userId, r);
         }
 
-        // Identify the two peer users by their actual role/permission-set
+        // Identify the peer users by their actual role/permission-set
         // assignment rather than a LastName LIKE match - a loose wildcard
         // match risks picking up unrelated same-named users elsewhere in the
         // org and produces flaky, non-deterministic results.
         UserRole peerRole = [SELECT Id FROM UserRole WHERE Name = 'PRA_Test_Peer_Role' LIMIT 1];
         List<User> peerUsers = [SELECT Id FROM User WHERE UserRoleId = :peerRole.Id];
-        System.assertEquals(2, peerUsers.size(), 'Expected exactly the two peer test users under this role');
+        System.assertEquals(3, peerUsers.size(), 'Expected exactly the three peer test users under this role');
 
         PermissionSet accountEditSet = [SELECT Id FROM PermissionSet WHERE Name = 'PRA_Test_Account_Edit' LIMIT 1];
         Set<Id> assigneeIdsWithEdit = new Set<Id>();
@@ -256,6 +300,32 @@ private class PermissionRiskAnalyzerServiceTest {
             withEditResult.riskScore > withoutEditResult.riskScore,
             'The peer with more access than their same-role counterpart should score higher'
         );
+    }
+
+    @isTest
+    static void testScanOrg_doesNotFlagAccessHeldByMajorityOfRole() {
+        Test.startTest();
+        PermissionRiskAnalyzerService.ScanResult result = PermissionRiskAnalyzerService.scanOrg();
+        Test.stopTest();
+
+        Map<Id, PermissionRiskAnalyzerService.UserRiskResult> byUserId =
+            new Map<Id, PermissionRiskAnalyzerService.UserRiskResult>();
+        for (PermissionRiskAnalyzerService.UserRiskResult r : result.userResults) {
+            byUserId.put(r.userId, r);
+        }
+
+        UserRole majorityRole = [SELECT Id FROM UserRole WHERE Name = 'PRA_Test_Majority_Role' LIMIT 1];
+        List<User> majorityRoleUsers = [SELECT Id FROM User WHERE UserRoleId = :majorityRole.Id];
+        System.assertEquals(3, majorityRoleUsers.size(), 'Expected exactly the three majority-role test users');
+
+        for (User u : majorityRoleUsers) {
+            PermissionRiskAnalyzerService.UserRiskResult r = byUserId.get(u.Id);
+            System.assertNotEquals(null, r, 'Expected a scan result for every majority-role test user');
+            System.assert(
+                !r.dangerousPermissions.contains('Edit Access: Contact'),
+                'Access held by the majority of a role is normal, not excess, and should never be flagged'
+            );
+        }
     }
 
     @isTest

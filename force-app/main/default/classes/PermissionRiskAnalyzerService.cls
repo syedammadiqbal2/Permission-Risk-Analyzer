@@ -198,9 +198,11 @@ public with sharing class PermissionRiskAnalyzerService {
 
     /**
      * Second pass over every scored user, grouped by UserRole: for each sensitive
-     * object, if only some members of a role can edit it, that split itself is
-     * the signal (either an over-grant on the ones who can, or an inconsistent
-     * rollout) - flag the users who have the access their same-role peers lack.
+     * object, only flag a split when the users WITH edit access are a clear
+     * minority of the role (e.g. 2 of 8 sales reps) - that's the signature of a
+     * one-off/excess grant. A split where the MAJORITY has the access is normal
+     * variance, not risk, and isn't flagged (nor is anyone flagged for lacking
+     * access - this only ever penalizes having more than the role's norm).
      */
     private static void applyPeerObjectAccessComparison(List<UserRiskResult> userResults) {
         // Admins are expected to hold broad access, so they're excluded from
@@ -229,8 +231,12 @@ public with sharing class PermissionRiskAnalyzerService {
                         withEditAccess.add(r);
                     }
                 }
-                Boolean isSplitWithinRole = !withEditAccess.isEmpty() && withEditAccess.size() < peers.size();
-                if (!isSplitWithinRole) {
+                // Flag only when those with access are strictly fewer than
+                // those without - i.e. a minority holding extra access, not a
+                // majority the rest of the role simply hasn't caught up to.
+                Boolean isMinorityWithAccess = !withEditAccess.isEmpty()
+                    && withEditAccess.size() < (peers.size() - withEditAccess.size());
+                if (!isMinorityWithAccess) {
                     continue;
                 }
                 for (UserRiskResult r : withEditAccess) {
