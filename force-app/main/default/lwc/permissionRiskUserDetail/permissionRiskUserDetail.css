@@ -27,3 +27,9 @@
     background-color: #d7f5df;
     color: #135c2c;
 }
+
+.slds-modal__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}

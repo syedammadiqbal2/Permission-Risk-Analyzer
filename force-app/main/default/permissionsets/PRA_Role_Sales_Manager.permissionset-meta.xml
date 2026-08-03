@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>PRA Role - Sales Manager</label>
+    <description>Baseline system access expected for the Sales Manager role. No system-level dangerous permissions - day-to-day sales management only.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+</PermissionSet>

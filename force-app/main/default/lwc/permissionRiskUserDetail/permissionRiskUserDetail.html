@@ -59,7 +59,12 @@
             </div>
 
             <footer class="slds-modal__footer">
-                <lightning-button label="Close" onclick={handleClose}></lightning-button>
+                <lightning-button
+                    label="Go to User"
+                    icon-name="utility:new_window"
+                    onclick={handleGoToUser}
+                ></lightning-button>
+                <lightning-button label="Close" variant="brand" onclick={handleClose}></lightning-button>
             </footer>
         </div>
     </section>

@@ -53,6 +53,44 @@ private class PermissionRiskAnalyzerServiceTest {
                 new PermissionSetAssignment(AssigneeId = inactiveWithAccess.Id, PermissionSetId = riskySet.Id)
             };
 
+            // Two users sharing a role, one with an extra Account edit grant the
+            // other doesn't have - exercises the same-role object-access
+            // comparison in applyPeerObjectAccessComparison. "Standard User"
+            // already grants Account/Contact/etc. edit access by default, which
+            // would make both peers identical regardless of the extra permission
+            // set - so these two specifically use the near-empty baseline
+            // profile instead, to isolate the effect of the extra grant.
+            Profile minimalProfile = [SELECT Id FROM Profile WHERE Name = 'Minimum Access - Salesforce' LIMIT 1];
+
+            UserRole peerRole = new UserRole(Name = 'PRA_Test_Peer_Role');
+            insert peerRole;
+
+            User peerWithEditAccess = buildTestUser('PeerWithEdit', minimalProfile.Id);
+            peerWithEditAccess.IsActive = true;
+            peerWithEditAccess.UserRoleId = peerRole.Id;
+            insert peerWithEditAccess;
+
+            User peerWithoutEditAccess = buildTestUser('PeerNoEdit', minimalProfile.Id);
+            peerWithoutEditAccess.IsActive = true;
+            peerWithoutEditAccess.UserRoleId = peerRole.Id;
+            insert peerWithoutEditAccess;
+
+            PermissionSet accountEditSet = new PermissionSet(
+                Name = 'PRA_Test_Account_Edit',
+                Label = 'PRA Test Account Edit'
+            );
+            insert accountEditSet;
+            insert new ObjectPermissions(
+                ParentId = accountEditSet.Id,
+                SobjectType = 'Account',
+                PermissionsRead = true,
+                PermissionsEdit = true
+            );
+            insert new PermissionSetAssignment(
+                AssigneeId = peerWithEditAccess.Id,
+                PermissionSetId = accountEditSet.Id
+            );
+
             // The controller's queries use WITH SECURITY_ENFORCED, so the running
             // user needs the app's own permission set (which grants FLS on the
             // custom fields) rather than relying on admin/Modify All Data to
@@ -162,6 +200,62 @@ private class PermissionRiskAnalyzerServiceTest {
             }
         }
         System.assert(foundHighRiskUser, 'Expected at least one Critical/High risk user from test setup data');
+    }
+
+    @isTest
+    static void testScanOrg_flagsUserWithMoreObjectAccessThanSameRolePeer() {
+        Test.startTest();
+        PermissionRiskAnalyzerService.ScanResult result = PermissionRiskAnalyzerService.scanOrg();
+        Test.stopTest();
+
+        Map<Id, PermissionRiskAnalyzerService.UserRiskResult> byUserId =
+            new Map<Id, PermissionRiskAnalyzerService.UserRiskResult>();
+        for (PermissionRiskAnalyzerService.UserRiskResult r : result.userResults) {
+            byUserId.put(r.userId, r);
+        }
+
+        // Identify the two peer users by their actual role/permission-set
+        // assignment rather than a LastName LIKE match - a loose wildcard
+        // match risks picking up unrelated same-named users elsewhere in the
+        // org and produces flaky, non-deterministic results.
+        UserRole peerRole = [SELECT Id FROM UserRole WHERE Name = 'PRA_Test_Peer_Role' LIMIT 1];
+        List<User> peerUsers = [SELECT Id FROM User WHERE UserRoleId = :peerRole.Id];
+        System.assertEquals(2, peerUsers.size(), 'Expected exactly the two peer test users under this role');
+
+        PermissionSet accountEditSet = [SELECT Id FROM PermissionSet WHERE Name = 'PRA_Test_Account_Edit' LIMIT 1];
+        Set<Id> assigneeIdsWithEdit = new Set<Id>();
+        for (PermissionSetAssignment psa : [SELECT AssigneeId FROM PermissionSetAssignment WHERE PermissionSetId = :accountEditSet.Id]) {
+            assigneeIdsWithEdit.add(psa.AssigneeId);
+        }
+
+        Id withEditId;
+        Id withoutEditId;
+        for (User u : peerUsers) {
+            if (assigneeIdsWithEdit.contains(u.Id)) {
+                withEditId = u.Id;
+            } else {
+                withoutEditId = u.Id;
+            }
+        }
+
+        PermissionRiskAnalyzerService.UserRiskResult withEditResult = byUserId.get(withEditId);
+        PermissionRiskAnalyzerService.UserRiskResult withoutEditResult = byUserId.get(withoutEditId);
+
+        System.assertNotEquals(null, withEditResult, 'Expected a scan result for the peer with Account edit access');
+        System.assertNotEquals(null, withoutEditResult, 'Expected a scan result for the peer without Account edit access');
+
+        System.assert(
+            withEditResult.dangerousPermissions.contains('Edit Access: Account'),
+            'User with Account edit access should be flagged for it relative to their same-role peer'
+        );
+        System.assert(
+            !withoutEditResult.dangerousPermissions.contains('Edit Access: Account'),
+            'User without Account edit access should not be flagged - they are the baseline, not the outlier'
+        );
+        System.assert(
+            withEditResult.riskScore > withoutEditResult.riskScore,
+            'The peer with more access than their same-role counterpart should score higher'
+        );
     }
 
     @isTest

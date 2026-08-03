@@ -1,7 +1,8 @@
 import { LightningElement, api, wire } from 'lwc';
+import { NavigationMixin } from 'lightning/navigation';
 import getUserDetail from '@salesforce/apex/PermissionRiskAnalyzerController.getUserDetail';
 
-export default class PermissionRiskUserDetail extends LightningElement {
+export default class PermissionRiskUserDetail extends NavigationMixin(LightningElement) {
     _recordId;
     log;
     errorMessage;
@@ -30,6 +31,10 @@ export default class PermissionRiskUserDetail extends LightningElement {
 
     get username() {
         return this.log && this.log.User__r ? this.log.User__r.Username : '';
+    }
+
+    get userId() {
+        return this.log ? this.log.User__c : undefined;
     }
 
     get profileName() {
@@ -89,6 +94,17 @@ export default class PermissionRiskUserDetail extends LightningElement {
 
     handleClose() {
         this.dispatchEvent(new CustomEvent('close'));
+    }
+
+    handleGoToUser() {
+        this[NavigationMixin.Navigate]({
+            type: 'standard__recordPage',
+            attributes: {
+                recordId: this.userId,
+                objectApiName: 'User',
+                actionName: 'view'
+            }
+        });
     }
 
     reduceError(error) {

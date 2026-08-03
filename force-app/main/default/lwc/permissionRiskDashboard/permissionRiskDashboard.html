@@ -1,5 +1,5 @@
 <template>
-    <lightning-card title="Permission Risk Analyzer" icon-name="utility:shield">
+    <lightning-card icon-name="utility:shield">
         <div slot="actions">
             <lightning-button-group>
                 <lightning-button
@@ -64,40 +64,98 @@
                     </template>
                 </div>
 
-                <!-- Top risks table -->
-                <p class="slds-text-heading_small slds-m-bottom_x-small">Top Risks</p>
-                <table class="slds-table slds-table_cell-buffer slds-table_bordered">
-                    <thead>
-                        <tr class="slds-line-height_reset">
-                            <th scope="col">User</th>
-                            <th scope="col">Risk Level</th>
-                            <th scope="col">Risk Score</th>
-                            <th scope="col">Dangerous Permissions</th>
-                            <th scope="col"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template for:each={topRisks} for:item="row">
-                            <tr key={row.id}>
-                                <td>
-                                    <div class="slds-truncate" title={row.name}>{row.name}</div>
-                                    <div class="slds-truncate slds-text-body_small slds-text-color_weak" title={row.username}>{row.username}</div>
-                                </td>
-                                <td><span class={row.badgeClass}>{row.riskLevel}</span></td>
-                                <td>{row.riskScore}</td>
-                                <td><div class="slds-truncate" title={row.dangerousPermissions}>{row.dangerousPermissions}</div></td>
-                                <td>
-                                    <lightning-button
-                                        label="View"
-                                        variant="neutral"
-                                        data-id={row.id}
-                                        onclick={handleViewDetail}
-                                    ></lightning-button>
-                                </td>
+                <!-- Search + filters -->
+                <div class="slds-grid slds-wrap slds-gutters slds-m-bottom_medium slds-grid_vertical-align-end">
+                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-4 slds-p-vertical_x-small">
+                        <lightning-input
+                            type="search"
+                            label="Search"
+                            placeholder="Name, email, or username"
+                            value={searchTerm}
+                            onchange={handleSearchChange}
+                        ></lightning-input>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-4 slds-p-vertical_x-small">
+                        <lightning-combobox
+                            label="Role"
+                            value={roleFilter}
+                            options={roleOptions}
+                            onchange={handleRoleFilterChange}
+                        ></lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-4 slds-p-vertical_x-small">
+                        <lightning-combobox
+                            label="Profile"
+                            value={profileFilter}
+                            options={profileOptions}
+                            onchange={handleProfileFilterChange}
+                        ></lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-4 slds-p-vertical_x-small">
+                        <lightning-combobox
+                            label="Severity"
+                            value={severityFilter}
+                            options={severityOptions}
+                            onchange={handleSeverityFilterChange}
+                        ></lightning-combobox>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-4 slds-p-vertical_x-small">
+                        <lightning-button
+                            label="Clear Filters"
+                            variant="neutral"
+                            onclick={handleClearFilters}
+                            disabled={clearFiltersDisabled}
+                        ></lightning-button>
+                    </div>
+                </div>
+
+                <!-- Results table -->
+                <p class="slds-text-heading_small slds-m-bottom_x-small">
+                    Scan Results ({filteredResults.length})
+                </p>
+
+                <template if:true={showNoMatchesState}>
+                    <div class="slds-illustration slds-illustration_small slds-p-around_large slds-text-align_center">
+                        <p class="slds-text-heading_small">No users match the current filters</p>
+                    </div>
+                </template>
+
+                <template if:false={showNoMatchesState}>
+                    <table class="slds-table slds-table_cell-buffer slds-table_bordered">
+                        <thead>
+                            <tr class="slds-line-height_reset">
+                                <th scope="col">User</th>
+                                <th scope="col">Role</th>
+                                <th scope="col">Risk Level</th>
+                                <th scope="col">Risk Score</th>
+                                <th scope="col">Dangerous Permissions</th>
+                                <th scope="col"></th>
                             </tr>
-                        </template>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <template for:each={filteredResults} for:item="row">
+                                <tr key={row.id}>
+                                    <td>
+                                        <div class="slds-truncate" title={row.name}>{row.name}</div>
+                                        <div class="slds-truncate slds-text-body_small slds-text-color_weak" title={row.username}>{row.username}</div>
+                                    </td>
+                                    <td>{row.roleName}</td>
+                                    <td><span class={row.badgeClass}>{row.riskLevel}</span></td>
+                                    <td>{row.riskScore}</td>
+                                    <td><div class="slds-truncate" title={row.dangerousPermissions}>{row.dangerousPermissions}</div></td>
+                                    <td>
+                                        <lightning-button
+                                            label="View"
+                                            variant="neutral"
+                                            data-id={row.id}
+                                            onclick={handleViewDetail}
+                                        ></lightning-button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </template>
             </template>
         </div>
     </lightning-card>

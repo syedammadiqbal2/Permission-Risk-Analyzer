@@ -38,12 +38,21 @@ public with sharing class PermissionRiskAnalyzerService {
         'PermissionsAuthorApex' => 'Author Apex'
     };
 
+    // Standard objects checked for same-role edit-access inconsistencies. A user
+    // whose peers (same UserRole) can't edit one of these, but they can, gets
+    // flagged - that split is itself a sign of a misconfigured/one-off grant.
+    @TestVisible
+    private static final List<String> SENSITIVE_OBJECTS = new List<String>{
+        'Account', 'Contact', 'Opportunity', 'Lead', 'Case'
+    };
+
     private static final Integer INACTIVITY_DAYS_THRESHOLD = 90;
     private static final Integer COMPOUND_RISK_PERMISSION_COUNT = 3;
     private static final Integer COMPOUND_RISK_BONUS = 50;
     private static final Integer ROLE_MISMATCH_BONUS = 30;
     private static final Integer INACTIVE_WITH_ACCESS_BONUS = 40;
     private static final Integer EXTERNAL_USER_BONUS = 70;
+    private static final Integer OBJECT_ACCESS_MISMATCH_BONUS = 35;
 
     private static final Integer THRESHOLD_CRITICAL = 150;
     private static final Integer THRESHOLD_HIGH = 80;
@@ -66,6 +75,10 @@ public with sharing class PermissionRiskAnalyzerService {
             }
             userResults.add(calculateUserRisk(u, perms));
         }
+
+        // Peer comparison needs every user's score already computed, so it can
+        // only run after the individual-scoring loop above, not inside it.
+        applyPeerObjectAccessComparison(userResults);
 
         userResults.sort();
 
@@ -173,8 +186,63 @@ public with sharing class PermissionRiskAnalyzerService {
         r.dangerousPermissions = dangerousPermissions;
         r.riskReasons = reasons;
         r.recommendedActions = recommendedActions;
-        r.riskLevel = isAdminProfile && score > 0 ? 'Critical' : scoreToRiskLevel(score);
+        r.editableObjects = perms.getEditableObjects();
+        r.isAdminProfile = isAdminProfile;
+        r.riskLevel = deriveRiskLevel(score, isAdminProfile);
         return r;
+    }
+
+    private static String deriveRiskLevel(Integer score, Boolean isAdminProfile) {
+        return isAdminProfile && score > 0 ? 'Critical' : scoreToRiskLevel(score);
+    }
+
+    /**
+     * Second pass over every scored user, grouped by UserRole: for each sensitive
+     * object, if only some members of a role can edit it, that split itself is
+     * the signal (either an over-grant on the ones who can, or an inconsistent
+     * rollout) - flag the users who have the access their same-role peers lack.
+     */
+    private static void applyPeerObjectAccessComparison(List<UserRiskResult> userResults) {
+        // Admins are expected to hold broad access, so they're excluded from
+        // this comparison entirely - both as candidates to flag and as members
+        // of the peer group other users get compared against.
+        Map<String, List<UserRiskResult>> byRole = new Map<String, List<UserRiskResult>>();
+        for (UserRiskResult r : userResults) {
+            if (String.isBlank(r.roleName) || r.isAdminProfile) {
+                continue;
+            }
+            if (!byRole.containsKey(r.roleName)) {
+                byRole.put(r.roleName, new List<UserRiskResult>());
+            }
+            byRole.get(r.roleName).add(r);
+        }
+
+        for (String roleName : byRole.keySet()) {
+            List<UserRiskResult> peers = byRole.get(roleName);
+            if (peers.size() < 2) {
+                continue;
+            }
+            for (String objectName : SENSITIVE_OBJECTS) {
+                List<UserRiskResult> withEditAccess = new List<UserRiskResult>();
+                for (UserRiskResult r : peers) {
+                    if (r.editableObjects.contains(objectName)) {
+                        withEditAccess.add(r);
+                    }
+                }
+                Boolean isSplitWithinRole = !withEditAccess.isEmpty() && withEditAccess.size() < peers.size();
+                if (!isSplitWithinRole) {
+                    continue;
+                }
+                for (UserRiskResult r : withEditAccess) {
+                    r.riskScore += OBJECT_ACCESS_MISMATCH_BONUS;
+                    r.dangerousPermissions.add('Edit Access: ' + objectName);
+                    r.riskReasons.add('Has Edit access to ' + objectName + ' while ' + (peers.size() - withEditAccess.size())
+                        + ' of ' + peers.size() + ' peers with the same role (' + roleName + ') do not');
+                    r.recommendedActions.add('Confirm ' + objectName + ' edit access is intentional for this user and not a one-off grant relative to their role peers.');
+                    r.riskLevel = deriveRiskLevel(r.riskScore, r.isAdminProfile);
+                }
+            }
+        }
     }
 
     private static Boolean roleLooksLikeManagementTier(String roleName) {
@@ -272,7 +340,7 @@ public with sharing class PermissionRiskAnalyzerService {
         Set<Id> userIds = new Map<Id, User>(users).keySet();
 
         List<PermissionSetAssignment> assignments = [
-            SELECT AssigneeId,
+            SELECT AssigneeId, PermissionSetId,
                    PermissionSet.PermissionsModifyAllData,
                    PermissionSet.PermissionsViewAllData,
                    PermissionSet.PermissionsManageUsers,
@@ -285,6 +353,26 @@ public with sharing class PermissionRiskAnalyzerService {
             WHERE AssigneeId IN :userIds
         ];
 
+        Set<Id> permissionSetIds = new Set<Id>();
+        for (PermissionSetAssignment psa : assignments) {
+            permissionSetIds.add(psa.PermissionSetId);
+        }
+
+        // Map of PermissionSetId -> set of sensitive objects that permission set can edit.
+        Map<Id, Set<String>> editableObjectsByPermSet = new Map<Id, Set<String>>();
+        if (!permissionSetIds.isEmpty()) {
+            for (ObjectPermissions op : [
+                SELECT ParentId, SobjectType
+                FROM ObjectPermissions
+                WHERE ParentId IN :permissionSetIds AND SobjectType IN :SENSITIVE_OBJECTS AND PermissionsEdit = true
+            ]) {
+                if (!editableObjectsByPermSet.containsKey(op.ParentId)) {
+                    editableObjectsByPermSet.put(op.ParentId, new Set<String>());
+                }
+                editableObjectsByPermSet.get(op.ParentId).add(op.SobjectType);
+            }
+        }
+
         for (PermissionSetAssignment psa : assignments) {
             AggregatedPermissions agg = result.get(psa.AssigneeId);
             if (agg == null) {
@@ -292,6 +380,10 @@ public with sharing class PermissionRiskAnalyzerService {
                 result.put(psa.AssigneeId, agg);
             }
             agg.mergeFromPermissionSet(psa.PermissionSet);
+            Set<String> editableForThisPermSet = editableObjectsByPermSet.get(psa.PermissionSetId);
+            if (editableForThisPermSet != null) {
+                agg.mergeEditableObjects(editableForThisPermSet);
+            }
         }
 
         return result;
@@ -303,6 +395,7 @@ public with sharing class PermissionRiskAnalyzerService {
      */
     public class AggregatedPermissions {
         private Map<String, Boolean> flags = new Map<String, Boolean>();
+        private Set<String> editableObjects = new Set<String>();
 
         public void mergeFromPermissionSet(PermissionSet ps) {
             mergeFlag('PermissionsModifyAllData', ps.PermissionsModifyAllData);
@@ -323,6 +416,16 @@ public with sharing class PermissionRiskAnalyzerService {
         public Boolean hasPermission(String key) {
             return flags.containsKey(key) && flags.get(key) == true;
         }
+
+        public void mergeEditableObjects(Set<String> objectNames) {
+            editableObjects.addAll(objectNames);
+        }
+
+        public List<String> getEditableObjects() {
+            List<String> result = new List<String>(editableObjects);
+            result.sort();
+            return result;
+        }
     }
 
     /** Per-user scan output used by both the persisted log and the LWC response. */
@@ -340,6 +443,8 @@ public with sharing class PermissionRiskAnalyzerService {
         @AuraEnabled public List<String> dangerousPermissions;
         @AuraEnabled public List<String> riskReasons;
         @AuraEnabled public List<String> recommendedActions;
+        @AuraEnabled public List<String> editableObjects;
+        public Boolean isAdminProfile;
 
         // Highest risk first
         public Integer compareTo(Object other) {

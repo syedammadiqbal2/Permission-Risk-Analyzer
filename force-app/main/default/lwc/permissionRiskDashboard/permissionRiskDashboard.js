@@ -1,5 +1,6 @@
 import { LightningElement, track, wire } from 'lwc';
 import { refreshApex } from '@salesforce/apex';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import runScan from '@salesforce/apex/PermissionRiskAnalyzerController.runScan';
 import getLatestScanResults from '@salesforce/apex/PermissionRiskAnalyzerController.getLatestScanResults';
 
@@ -12,6 +13,13 @@ const RISK_BADGE_CLASS = {
     Low: 'risk-badge risk-low'
 };
 
+const ALL_OPTION = { label: 'All', value: '' };
+
+const SEVERITY_OPTIONS = [
+    ALL_OPTION,
+    ...RISK_LEVEL_ORDER.map((level) => ({ label: level, value: level }))
+];
+
 export default class PermissionRiskDashboard extends LightningElement {
     @track logs = [];
     @track selectedLogId;
@@ -19,6 +27,13 @@ export default class PermissionRiskDashboard extends LightningElement {
     errorMessage;
     lastScanDate;
     orgHealthScore;
+
+    searchTerm = '';
+    roleFilter = '';
+    profileFilter = '';
+    severityFilter = '';
+
+    severityOptions = SEVERITY_OPTIONS;
 
     wiredResult;
 
@@ -67,14 +82,67 @@ export default class PermissionRiskDashboard extends LightningElement {
         return this.logs.filter((log) => log.RiskLevel__c !== 'Low').length;
     }
 
-    get topRisks() {
-        return [...this.logs]
+    get roleOptions() {
+        return this.buildOptionsFrom((log) => log.User__r && log.User__r.UserRole ? log.User__r.UserRole.Name : null);
+    }
+
+    get profileOptions() {
+        return this.buildOptionsFrom((log) => log.User__r && log.User__r.Profile ? log.User__r.Profile.Name : null);
+    }
+
+    buildOptionsFrom(pluckName) {
+        const names = new Set();
+        this.logs.forEach((log) => {
+            const name = pluckName(log);
+            if (name) {
+                names.add(name);
+            }
+        });
+        return [ALL_OPTION, ...[...names].sort().map((name) => ({ label: name, value: name }))];
+    }
+
+    get hasActiveFilters() {
+        return Boolean(this.searchTerm || this.roleFilter || this.profileFilter || this.severityFilter);
+    }
+
+    get clearFiltersDisabled() {
+        return !this.hasActiveFilters;
+    }
+
+    get filteredLogs() {
+        const term = this.searchTerm.trim().toLowerCase();
+        return this.logs.filter((log) => {
+            if (this.severityFilter && log.RiskLevel__c !== this.severityFilter) {
+                return false;
+            }
+            const user = log.User__r || {};
+            if (this.roleFilter && (!user.UserRole || user.UserRole.Name !== this.roleFilter)) {
+                return false;
+            }
+            if (this.profileFilter && (!user.Profile || user.Profile.Name !== this.profileFilter)) {
+                return false;
+            }
+            if (term) {
+                const haystack = [user.Name, user.Username, user.Email]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase();
+                if (!haystack.includes(term)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }
+
+    get filteredResults() {
+        return [...this.filteredLogs]
             .sort((a, b) => b.RiskScore__c - a.RiskScore__c)
-            .slice(0, 10)
             .map((log) => ({
                 id: log.Id,
                 name: log.User__r ? log.User__r.Name : log.User__c,
                 username: log.User__r ? log.User__r.Username : '',
+                roleName: log.User__r && log.User__r.UserRole ? log.User__r.UserRole.Name : '—',
                 riskLevel: log.RiskLevel__c,
                 riskScore: log.RiskScore__c,
                 badgeClass: RISK_BADGE_CLASS[log.RiskLevel__c] || 'risk-badge',
@@ -86,6 +154,10 @@ export default class PermissionRiskDashboard extends LightningElement {
 
     get showEmptyState() {
         return !this.isLoading && !this.hasLogs && !this.errorMessage;
+    }
+
+    get showNoMatchesState() {
+        return this.hasLogs && this.hasActiveFilters && this.filteredResults.length === 0;
     }
 
     setLogs(data) {
@@ -126,32 +198,74 @@ export default class PermissionRiskDashboard extends LightningElement {
         this.selectedLogId = undefined;
     }
 
+    handleSearchChange(event) {
+        this.searchTerm = event.target.value || '';
+    }
+
+    handleRoleFilterChange(event) {
+        this.roleFilter = event.detail.value;
+    }
+
+    handleProfileFilterChange(event) {
+        this.profileFilter = event.detail.value;
+    }
+
+    handleSeverityFilterChange(event) {
+        this.severityFilter = event.detail.value;
+    }
+
+    handleClearFilters() {
+        this.searchTerm = '';
+        this.roleFilter = '';
+        this.profileFilter = '';
+        this.severityFilter = '';
+    }
+
     handleExportCsv() {
         if (!this.hasLogs) {
+            this.showToast('Nothing to export', 'Run a scan first to generate results.', 'warning');
             return;
         }
-        const header = ['User', 'Username', 'Risk Level', 'Risk Score', 'Dangerous Permissions', 'Recommended Actions'];
-        const rows = this.logs.map((log) => [
-            log.User__r ? log.User__r.Name : '',
-            log.User__r ? log.User__r.Username : '',
-            log.RiskLevel__c,
-            log.RiskScore__c,
-            (log.DangerousPermissions__c || '').split('|').join('; '),
-            (log.RecommendedActions__c || '').split('\n').join('; ')
-        ]);
-        const csvContent = [header, ...rows]
-            .map((row) => row.map((cell) => `"${String(cell === undefined || cell === null ? '' : cell).replace(/"/g, '""')}"`).join(','))
-            .join('\n');
+        if (!this.filteredLogs.length) {
+            this.showToast('Nothing to export', 'No scan results match the current filters.', 'warning');
+            return;
+        }
+        try {
+            const header = ['User', 'Username', 'Risk Level', 'Risk Score', 'Dangerous Permissions', 'Recommended Actions'];
+            const rows = this.filteredLogs.map((log) => [
+                log.User__r ? log.User__r.Name : '',
+                log.User__r ? log.User__r.Username : '',
+                log.RiskLevel__c,
+                log.RiskScore__c,
+                (log.DangerousPermissions__c || '').split('|').join('; '),
+                (log.RecommendedActions__c || '').split('\n').join('; ')
+            ]);
+            const csvContent = [header, ...rows]
+                .map((row) => row.map((cell) => `"${String(cell === undefined || cell === null ? '' : cell).replace(/"/g, '""')}"`).join(','))
+                .join('\n');
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `permission-risk-report-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `permission-risk-report-${new Date().toISOString().slice(0, 10)}.csv`;
+            // Lightning Experience renders components inside a sandboxed iframe
+            // that blocks same-frame anchor-click downloads; target="_blank"
+            // makes the browser treat this as a new browsing context instead,
+            // which isn't subject to that sandbox restriction.
+            link.target = '_blank';
+            link.rel = 'noopener';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            this.showToast('Export failed', this.reduceError(error), 'error');
+        }
+    }
+
+    showToast(title, message, variant) {
+        this.dispatchEvent(new ShowToastEvent({ title, message, variant }));
     }
 
     reduceError(error) {

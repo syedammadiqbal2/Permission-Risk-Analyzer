@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>PRA Role - Property Manager</label>
+    <description>Baseline system access expected for the Property Manager role. No system-level dangerous permissions.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+</PermissionSet>

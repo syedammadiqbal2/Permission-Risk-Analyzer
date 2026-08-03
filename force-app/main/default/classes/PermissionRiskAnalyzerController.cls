@@ -35,7 +35,8 @@ public with sharing class PermissionRiskAnalyzerController {
         String latestBatchId = latest[0].ScanBatchId__c;
 
         return [
-            SELECT Id, Name, User__c, User__r.Name, User__r.Username,
+            SELECT Id, Name, User__c, User__r.Name, User__r.Username, User__r.Email,
+                   User__r.Profile.Name, User__r.UserRole.Name,
                    RiskScore__c, RiskLevel__c, DangerousPermissions__c,
                    RecommendedActions__c, ScanDate__c, OrgHealthScore__c
             FROM Permission_Risk_Log__c

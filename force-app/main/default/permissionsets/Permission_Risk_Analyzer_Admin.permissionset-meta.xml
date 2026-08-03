@@ -13,14 +13,15 @@
         <enabled>true</enabled>
     </classAccesses>
 
-    <!--
-        No <tabSettings> block here on purpose. LWC-only tabs (using the
-        lightning__Tab target on permissionRiskDashboard) can't be defined as
-        source metadata - create the tab once via Setup > Tabs > Lightning
-        Component Tabs > New, picking permissionRiskDashboard, then retrieve
-        it into this package and add a <tabSettings> entry here for its
-        actual API name.
-    -->
+    <tabSettings>
+        <tab>Permission_Risk_Analyzer</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+
+    <applicationVisibilities>
+        <application>Permission_Risk_Analyzer</application>
+        <visible>true</visible>
+    </applicationVisibilities>
 
     <objectPermissions>
         <object>Permission_Risk_Log__c</object>
