@@ -129,40 +129,13 @@
                 </template>
 
                 <template if:false={showNoMatchesState}>
-                    <table class="slds-table slds-table_cell-buffer slds-table_bordered">
-                        <thead>
-                            <tr class="slds-line-height_reset">
-                                <th scope="col">User</th>
-                                <th scope="col">Role</th>
-                                <th scope="col">Risk Level</th>
-                                <th scope="col">Risk Score</th>
-                                <th scope="col">Dangerous Permissions</th>
-                                <th scope="col"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template for:each={filteredResults} for:item="row">
-                                <tr key={row.id}>
-                                    <td>
-                                        <div class="slds-truncate" title={row.name}>{row.name}</div>
-                                        <div class="slds-truncate slds-text-body_small slds-text-color_weak" title={row.username}>{row.username}</div>
-                                    </td>
-                                    <td>{row.roleName}</td>
-                                    <td><span class={row.badgeClass}>{row.riskLevel}</span></td>
-                                    <td>{row.riskScore}</td>
-                                    <td><div class="slds-truncate" title={row.dangerousPermissions}>{row.dangerousPermissions}</div></td>
-                                    <td>
-                                        <lightning-button
-                                            label="View"
-                                            variant="neutral"
-                                            data-id={row.id}
-                                            onclick={handleViewDetail}
-                                        ></lightning-button>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
+                    <c-permission-risk-datatable
+                        key-field="id"
+                        data={filteredResults}
+                        columns={columns}
+                        onrowaction={handleRowAction}
+                        hide-checkbox-column
+                    ></c-permission-risk-datatable>
                 </template>
             </template>
         </div>

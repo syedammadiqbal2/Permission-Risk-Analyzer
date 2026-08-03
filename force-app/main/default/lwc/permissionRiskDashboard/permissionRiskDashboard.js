@@ -20,6 +20,27 @@ const SEVERITY_OPTIONS = [
     ...RISK_LEVEL_ORDER.map((level) => ({ label: level, value: level }))
 ];
 
+const DATATABLE_COLUMNS = [
+    { label: 'User', fieldName: 'name', type: 'text' },
+    { label: 'Username', fieldName: 'username', type: 'text' },
+    { label: 'Role', fieldName: 'roleName', type: 'text' },
+    {
+        label: 'Risk Level',
+        fieldName: 'riskLevel',
+        type: 'riskBadge',
+        typeAttributes: {
+            riskLevel: { fieldName: 'riskLevel' },
+            badgeClass: { fieldName: 'badgeClass' }
+        }
+    },
+    { label: 'Risk Score', fieldName: 'riskScore', type: 'number' },
+    { label: 'Dangerous Permissions', fieldName: 'dangerousPermissions', type: 'text', wrapText: true },
+    {
+        type: 'button',
+        typeAttributes: { label: 'View', name: 'view', variant: 'neutral' }
+    }
+];
+
 export default class PermissionRiskDashboard extends LightningElement {
     @track logs = [];
     @track selectedLogId;
@@ -35,6 +56,7 @@ export default class PermissionRiskDashboard extends LightningElement {
     showAllUsers = false;
 
     severityOptions = SEVERITY_OPTIONS;
+    columns = DATATABLE_COLUMNS;
 
     wiredResult;
 
@@ -261,8 +283,10 @@ export default class PermissionRiskDashboard extends LightningElement {
         }
     }
 
-    handleViewDetail(event) {
-        this.selectedLogId = event.currentTarget.dataset.id;
+    handleRowAction(event) {
+        if (event.detail.action.name === 'view') {
+            this.selectedLogId = event.detail.row.id;
+        }
     }
 
     handleCloseDetail() {
